@@ -1,0 +1,218 @@
+---
+title: "BUAN6356_Homework1_Group4"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(data.table, forecast, leaps, tidyverse,MASS,stats,ggplot2,dplyr,rvest,caret,TinyTex , scales)
+```
+
+
+```{r}
+airfares <- read.csv("Airfares.csv", header = TRUE)
+airfares.dt <- setDT(airfares)
+airlines <- airfares.dt[,!c(1,2,3,4,7,8,14,15)] 
+airlines2 <- airfares.dt[,!c(1,2,3,4)]
+airlines2.df <- setDF(airlines2)
+```
+#Answer 1
+```{r}
+library(corrplot)
+cor.mat <- round(cor(airlines[,]),2)
+cor.mat
+corrplot(cor.mat,)
+
+```
+
+```{r}
+ggplot(airlines, aes(y = FARE, x = COUPON)) + 
+  geom_point(alpha = 0.6) +
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95) +
+  ggtitle("FARE vs COUPON")
+ggplot(airlines, aes(y = FARE, x = NEW))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs NEW CARRIERS ON ROUTE")
+ggplot(airlines, aes(y = FARE, x = HI))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs HERFINDAHL INDEX")
+ggplot(airlines, aes(y = FARE, x = S_INCOME))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs S-INCOME")
+ggplot(airlines, aes(y = FARE, x = E_INCOME))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs E-INCOME")
+ggplot(airlines, aes(y = FARE, x = S_POP))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs S-POP")
+ggplot(airlines, aes(y = FARE, x = E_POP))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs E-POP")
+ggplot(airlines, aes(y = FARE, x = DISTANCE))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs DISTANCE")
+ggplot(airlines, aes(y = FARE, x = PAX))+
+  geom_point(alpha = 0.6)+
+  geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95)+
+  ggtitle("FARE vs PAX")
+```
+**From the Correlation matrix and the scatter plots we can see that distance is highly correlated and followed by coupon.This both are highly positively correlated with each other.Single best predictor of Fare is Distance because it has highest correlation coefficent 0.67**
+
+#Answer 2
+```{r}
+library(dplyr)
+library(rvest)
+library(magrittr)
+PivotVacation <- airfares.dt %>%
+        dplyr::select(VACATION,FARE) %>%
+        group_by(VACATION) %>%
+        summarise(Response_Count = length(VACATION),ResponseTotal = nrow(airfares.dt), ResponsePercent = percent(length(VACATION)/nrow(airfares.dt)), AvgFare = mean(FARE))
+
+PivotSW <- airfares.dt %>%
+        dplyr::select(SW,FARE) %>%
+        group_by(SW) %>%
+        summarise(Response_Count = length(SW),ResponseTotal = nrow(airfares.dt), ResponsePercent = percent(length(SW)/nrow(airfares.dt)), AvgFare = mean(FARE))
+
+PivotGate <- airfares.dt %>%
+        dplyr::select(GATE,FARE) %>%
+        group_by(GATE) %>%
+        summarise(Response_Count = length(GATE),ResponseTotal = nrow(airfares.dt), ResponsePercent = percent(length(GATE)/nrow(airfares.dt)), AvgFare = mean(FARE))
+
+PivotSlot <- airfares.dt %>%
+        dplyr::select(SLOT,FARE) %>%
+        group_by(SLOT) %>%
+        summarise(Response_Count = length(SLOT),ResponseTotal = nrow(airfares.dt), ResponsePercent = percent(length(SLOT)/nrow(airfares.dt)), AvgFare = mean(FARE))
+
+PivotVacation
+PivotSW
+PivotGate
+PivotSlot
+```
+**Categorical predictor which seems best for predicting Fare is SW as wherever SW airlines is serving fares are much lower than the route where sw is not serving, so we can decide if sw is serving on that route then fare will be low else it will be high.**
+
+#Answer 3
+```{r dataPartition}
+set.seed(42)
+train.index <- sample(1:638, round(0.8*nrow(airlines2)))
+airfare.train.df <- airlines2[train.index, ]
+
+airfare.test.df <- airlines2[-train.index, ]
+```
+
+```{r Regression}
+airfares.lm <- lm(FARE ~ ., data = airfare.train.df)
+options(scipen = 999)
+summary(airfares.lm)
+```
+#Answer 4
+```{r Stepwise with Leaps Question 4}
+Stepwise <- regsubsets(FARE ~ ., data = airfare.train.df, nbest = 1, nvmax = dim(airfare.train.df)[2],
+                     method = "seqrep")
+Stepwise.Summary <- summary(Stepwise)
+Stepwise.Summary
+Stepwise.Summary$which
+print("Adjusted R-Squared") 
+as.matrix(Stepwise.Summary$adjr2)
+
+print("BIC")  
+as.matrix(Stepwise.Summary$bic)
+
+print("CP")  
+as.matrix(Stepwise.Summary$cp)
+```
+**Answer 4: We can see in the stepwise regression that initial data had 13 variables to start with. After running this regression against Fare, the variables have been dropped to 10.The dropped variables are Coupons and S_Income.We have arrived to this conclusion based on the adjusted Rsquare values and cp and bic and R square values obtained.As adjusted R square has to be highest '0.7760679', the safest place where it is highest '0.7760679' and CP is should be 12  and '11.73270 closest value is found at 11th place.As we can seein 11th pattern, Coupons and S_Income is False, hence it suffices to say that these variables dropped would make the model work better.**
+
+#Answer 5
+```{r}
+Exhaustive <- regsubsets(FARE ~ ., data = airfare.train.df, nbest = 1, nvmax = dim(airfare.train.df)[2],
+                     method = "exhaustive")
+Exhaustive.Summary <- summary(Exhaustive)
+Exhaustive.Summary$which
+print("Adjusted R-Squared") 
+as.matrix(Exhaustive.Summary$adjr2)
+
+print("BIC")  
+as.matrix(Exhaustive.Summary$bic)
+
+print("CP")  
+as.matrix(Exhaustive.Summary$cp)
+```
+**Answer 5: The results of the stepwise and exhaustive are almost similar.With exhaustive we can see that the model with 10 variables is the best model.The variables include are VACATION, SW, HI, E_INCOME, S_POP, E_POP, SLOT, GATE, DISTANCE, PAX.The cp value is also almost closest to 11 and Adjusted R2 is also highest.The dropped variables are NEW,Coupon,S_Income**
+
+#Answer 6
+```{r}
+print("Accuracy of Stepwise Regression")
+stepwise.lm <- lm(formula = FARE ~ NEW + VACATION + SW + HI + E_INCOME + S_POP + E_POP + SLOT + GATE + DISTANCE + PAX, data = airfare.train.df)
+stepwise.lm.predict <- predict(stepwise.lm, airfare.test.df)
+accuracy(stepwise.lm.predict, airfare.test.df$FARE)
+print("Accuracy of Exhaustive Regression")
+exhaustive.lm <- lm(formula = FARE ~ VACATION + SW + HI + E_INCOME + S_POP + E_POP + SLOT + GATE + DISTANCE + PAX, data = airfare.train.df)
+exhaustive.lm.predict <- predict(exhaustive.lm, airfare.test.df)
+accuracy(exhaustive.lm.predict, airfare.test.df$FARE)
+```
+
+**Answer 6: The RMSE value for stepwise Regression is less compared to the exhaustive search model. So we can say that the stepwise regression model is best compared exhaustive search**
+
+#Answer 7 & 8
+```{r Exhaustive Search Prediction }
+Exhaustive_pred_value_SW0 <- stepwise.lm$coefficients["VACATIONYes"]*0+
+                             stepwise.lm$coefficients["SWYes"]*0+
+                             stepwise.lm$coefficients["HI"]*4442.141 +
+                             stepwise.lm$coefficients["E_INCOME"]*27664 +
+                             stepwise.lm$coefficients["S_POP"]*4557004 +
+                             stepwise.lm$coefficients["E_POP"]*3195503 +
+                             stepwise.lm$coefficients["DISTANCE"]*1976 +
+                             stepwise.lm$coefficients["PAX"]*12782 +
+                             stepwise.lm$coefficients["(Intercept)"]
+print("Exhaustive_pred_value_SW0")
+print(Exhaustive_pred_value_SW0)
+
+Exhaustive_pred_value_SW1 <- stepwise.lm$coefficients["VACATIONYes"]*0+
+                             stepwise.lm$coefficients["SWYes"]*1+
+                             stepwise.lm$coefficients["HI"]*4442.141 +
+                             stepwise.lm$coefficients["E_INCOME"]*27664 +
+                             stepwise.lm$coefficients["S_POP"]*4557004 +
+                             stepwise.lm$coefficients["E_POP"]*3195503 +
+                             stepwise.lm$coefficients["DISTANCE"]*1976 +
+                             stepwise.lm$coefficients["PAX"]*12782 +
+                             stepwise.lm$coefficients["(Intercept)"]
+print("Exhaustive_pred_value_SW1")
+print(Exhaustive_pred_value_SW1)
+
+avg_reduction_fare <- Exhaustive_pred_value_SW0-Exhaustive_pred_value_SW1
+print("AVERAGE REDUCTION FARE")
+print(avg_reduction_fare)
+
+
+```
+** Answer 7 & 8 :we see that there is a reduction in Fare of $40.57  when Southwest airline is not serving versus when it is serving the route.**
+
+#Answer 9 :
+```{r}
+lm.backward_S_airfares<- regsubsets(FARE~., data=airfare.train.df, nbest= 1,nvmax=dim(airfare.train.df)[2], method="backward")
+summary_Q9<- summary(lm.backward_S_airfares)
+summary_Q9$which
+summary_Q9$cp
+summary_Q9$adjr2
+
+```
+
+**Answer 9 :We have dropped 3 variables from the model namely: COUPON, S_INCOME & NEW based on the ajusted R2 and Cp values. The model dropped similar variables as the exhaustive search.**
+
+#Answer 10
+```{r}
+lm.backward_S_AIC_airfares <-lm(FARE ~., data = airfare.train.df)
+lm.backward_S_AIC_airfares_Predict <- stepAIC(lm.backward_S_AIC_airfares, direction = "backward")
+summary_Q10<-summary(lm.backward_S_AIC_airfares_Predict)
+summary_Q10
+```
+**Answer 10: We say that when we didn’t drop any variable, our AIC was 3652.07. AIC kept on reducing as we kept dropping variables one by one. We are eliminating variables because to make a model better fit, we need to reduce AIC.  Let’s say when we dropped COUPON our AIC came to 3650.82 which is a minor drop. Now when we drop S_INCOME, Our AIC became 3649.84. Lastly when we dropped NEW; AIC was decreased to 3649.22. So, basically AIC from 3652.07 came drop to 3649.22 after removal of 3 variables. Also results in question 9 and 10 are same.**
+
